@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "embryo"
-version = "0.2.0"
-description = "自主 AI Agent 框架 - 参考 OpenClaw + Hermes Agent 架构"
+version = "0.3.0"
+description = "多后端 GUI Computer-Use 执行层 - 感知/规划/执行/验证 全链路"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"

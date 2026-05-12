@@ -1,14 +1,23 @@
 """
-Embryo - 基于多模态界面感知与动态重规划的 GUI 智能体框架
+Embryo - 多后端 GUI Computer-Use 执行层
+
+定位：不是单一 pyautogui 脚本，而是多后端 GUI Agent 执行器。
 
 核心架构：
-- TaskPlanner: 动态任务规划（todo list 生成 + 反馈更新 + 重规划）
-- Runtime: 双模式执行（通用 ReAct + GUI Plan Mode）
-- Skills: Markdown 工作流文档，渐进式加载，自动生成
-- Memory: 跨会话持久记忆（TF-IDF / 向量检索 / 时间衰减）
-- Tools: 可扩展工具系统（Computer Use / Terminal / File / MCP）
-- Security: 策略引擎 + Prompt 注入防护
-- Learning: 内建学习循环，从操作经验中自动生成 Skills
+- action/       多后端 GUI 执行（ComputerBackend ABC + PyAutoGUI/Playwright/VNC）
+- perception/   统一感知层（Observation + OCR + Accessibility + DOM + TargetResolver）
+- planning/     结构化规划（Pydantic schema + JSON repair + validation pipeline）
+- verification/ 规则化验证 + 失败分类（Verifier + FailureClassifier）
+- security/     能力授权模型 + API 鉴权 + 审计（CapabilityChecker + TokenValidator）
+- memory/       三层记忆（User/Task/Skill scope + 自主回忆决策）
+- skills/       可复用工作流 + 质量门控（SkillValidator lifecycle）
+- core/         Trace 记录（plan.json + steps.jsonl + screenshots）
+- server/       MCP Server + 三种执行模式（tool/plan/supervised）
+- benchmarks/   标准化 GUI benchmark（10 tasks + runner + metrics）
+- planner/      旧版执行器集成（TaskPlanner + PlanExecutor）
+- runtime/      Agent Loop + Session + Compaction
+- gateway/      多通道（Web API + Telegram）
+- tools/        工具注册表 + 适配器
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
