@@ -28,6 +28,7 @@ from .tools.computer_use import (
 from .tools.file_ops import EDIT_FILE_TOOL, LIST_DIR_TOOL, READ_FILE_TOOL, WRITE_FILE_TOOL
 from .tools.memory_tools import FORGET_TOOL, RECALL_TOOL, REMEMBER_TOOL, bind_memory_store
 from .tools.terminal import TERMINAL_TOOL
+from .security.policy import PolicyEngine
 
 logger = get_logger(__name__)
 
@@ -74,11 +75,14 @@ class EmbryoAgent:
         self.tools = ToolRegistry()
         self._register_tools()
 
+        self.policy = PolicyEngine()
+
         self.loop = AgentLoop(
             config=self.config,
             tool_registry=self.tools,
             skill_manager=self.skills,
             memory_store=self.memory,
+            policy_engine=self.policy,
         )
 
         self.learner = LearningEngine(

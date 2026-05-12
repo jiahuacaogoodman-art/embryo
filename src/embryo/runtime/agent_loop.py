@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from ..skills import SkillManager
     from ..memory import MemoryStore
     from ..tools import ToolRegistry
+    from ..security.policy import PolicyEngine
 
 logger = get_logger(__name__)
 
@@ -62,11 +63,13 @@ class AgentLoop:
         tool_registry: "ToolRegistry",
         skill_manager: "SkillManager",
         memory_store: "MemoryStore",
+        policy_engine: Optional["PolicyEngine"] = None,
     ):
         self.config = config
         self.tools = tool_registry
         self.skills = skill_manager
         self.memory = memory_store
+        self.policy = policy_engine
         self._client = None
         self._max_iterations = 30
         self._max_consecutive_errors = 3
@@ -287,7 +290,7 @@ class AgentLoop:
             return None
 
     def _execute_tool_safe(self, tool_call: dict[str, Any], session: Session) -> ToolCall:
-        """安全执行工具调用（带超时和输出截断）"""
+        """安全执行工具调用（带策略检查 + 超时 + 输出截断）"""
         start = time.time()
         name = tool_call["name"]
         arguments = tool_call.get("arguments", {})
@@ -297,11 +300,34 @@ class AgentLoop:
 
         logger.debug("tool_execute_start", tool=name, arguments=arguments)
 
+        # 安全策略检查
+        if self.policy:
+            from ..security.policy import PolicyDecision
+            check = self.policy.check(name, arguments)
+
+            if check.decision == PolicyDecision.DENY:
+                record.result = f"[Policy DENIED] {check.reason}"
+                record.success = False
+                logger.warning("tool_policy_denied", tool=name, reason=check.reason)
+                record.duration = time.time() - start
+                session.add_tool_call(record)
+                return record
+
+            elif check.decision == PolicyDecision.ASK:
+                # 需要确认 — 当前自动拒绝（未来接入 UI 确认）
+                confirmed = self.policy.request_confirmation(check)
+                if not confirmed:
+                    record.result = f"[Policy ASK - Denied] {check.reason}. 用户未确认，已拒绝。"
+                    record.success = False
+                    record.duration = time.time() - start
+                    session.add_tool_call(record)
+                    return record
+
         try:
             result = self.tools.execute(name, arguments, session=session)
             result_str = str(result)
 
-            # 输出截断保护（防止撑爆上下文）
+            # 输出截断保护
             if len(result_str) > MAX_TOOL_OUTPUT:
                 truncated_notice = (
                     f"\n\n[输出已截断: 原始 {len(result_str)} 字符，"
