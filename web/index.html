@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Embryo Agent</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            width: 260px;
+            background: #16213e;
+            border-right: 1px solid #2a2a4a;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+        }
+        .sidebar h1 {
+            font-size: 18px;
+            color: #4fc3f7;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        .sidebar-section { margin-bottom: 16px; }
+        .sidebar-section h3 {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .sidebar-btn {
+            display: block;
+            width: 100%;
+            padding: 8px 12px;
+            margin-bottom: 4px;
+            background: transparent;
+            border: none;
+            color: #ccc;
+            text-align: left;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .sidebar-btn:hover { background: #2a2a4a; }
+        .sidebar-btn.active { background: #0a3d62; color: #4fc3f7; }
+        .stats { font-size: 12px; color: #666; margin-top: auto; }
+        .stats span { display: block; margin-bottom: 4px; }
+
+        /* 主内容区 */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 消息区 */
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+        .message {
+            max-width: 720px;
+            margin: 0 auto 16px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .message.user {
+            background: #0a3d62;
+            margin-left: auto;
+            margin-right: 0;
+            max-width: 600px;
+        }
+        .message.assistant {
+            background: #2d2d44;
+        }
+        .message code {
+            background: #1a1a2e;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .message pre {
+            background: #1a1a2e;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+        .typing {
+            color: #888;
+            font-style: italic;
+        }
+
+        /* 输入区 */
+        .input-area {
+            padding: 16px 24px;
+            border-top: 1px solid #2a2a4a;
+            background: #16213e;
+        }
+        .input-wrapper {
+            max-width: 720px;
+            margin: 0 auto;
+            display: flex;
+            gap: 8px;
+        }
+        .input-wrapper textarea {
+            flex: 1;
+            padding: 12px 16px;
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            border-radius: 12px;
+            color: #e0e0e0;
+            font-size: 14px;
+            resize: none;
+            height: 44px;
+            max-height: 120px;
+            outline: none;
+        }
+        .input-wrapper textarea:focus { border-color: #4fc3f7; }
+        .send-btn {
+            padding: 0 20px;
+            background: #4fc3f7;
+            border: none;
+            border-radius: 12px;
+            color: #1a1a2e;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .send-btn:hover { background: #81d4fa; }
+        .send-btn:disabled { background: #444; cursor: not-allowed; }
+
+        /* 面板 */
+        .panel {
+            display: none;
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+        .panel.active { display: block; }
+        .panel h2 { color: #4fc3f7; margin-bottom: 16px; }
+        .panel-item {
+            background: #2d2d44;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .panel-item .label {
+            color: #4fc3f7;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h1>Embryo Agent</h1>
+        <div class="sidebar-section">
+            <h3>导航</h3>
+            <button class="sidebar-btn active" onclick="showPanel('chat')">对话</button>
+            <button class="sidebar-btn" onclick="showPanel('memory')">记忆</button>
+            <button class="sidebar-btn" onclick="showPanel('skills')">技能</button>
+            <button class="sidebar-btn" onclick="showPanel('tools')">工具</button>
+        </div>
+        <div class="sidebar-section">
+            <h3>会话</h3>
+            <button class="sidebar-btn" onclick="newSession()">+ 新会话</button>
+            <div id="session-list"></div>
+        </div>
+        <div class="stats" id="stats">
+            <span>加载中...</span>
+        </div>
+    </div>
+
+    <div class="main">
+        <!-- 对话面板 -->
+        <div class="panel active" id="panel-chat">
+            <div class="messages" id="messages"></div>
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <textarea id="input" placeholder="输入消息..." rows="1"
+                        onkeydown="handleKey(event)"></textarea>
+                    <button class="send-btn" id="send-btn" onclick="sendMessage()">发送</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 记忆面板 -->
+        <div class="panel" id="panel-memory">
+            <h2>记忆</h2>
+            <div id="memory-list"></div>
+        </div>
+
+        <!-- 技能面板 -->
+        <div class="panel" id="panel-skills">
+            <h2>技能</h2>
+            <div id="skills-list"></div>
+        </div>
+
+        <!-- 工具面板 -->
+        <div class="panel" id="panel-tools">
+            <h2>工具</h2>
+            <div id="tools-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const API = window.location.origin;
+        let currentSession = null;
+        let isLoading = false;
+
+        // === 初始化 ===
+        async function init() {
+            await loadStatus();
+            await loadSessions();
+        }
+
+        // === 对话 ===
+        async function sendMessage() {
+            const input = document.getElementById('input');
+            const text = input.value.trim();
+            if (!text || isLoading) return;
+
+            input.value = '';
+            input.style.height = '44px';
+            addMessage('user', text);
+            setLoading(true);
+
+            try {
+                const resp = await fetch(`${API}/api/chat`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        message: text,
+                        session_id: currentSession,
+                    }),
+                });
+                const data = await resp.json();
+                addMessage('assistant', data.response);
+                currentSession = data.session_id;
+            } catch (e) {
+                addMessage('assistant', `[Error] ${e.message}`);
+            }
+
+            setLoading(false);
+        }
+
+        function addMessage(role, text) {
+            const container = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+            div.textContent = text;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function handleKey(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+            // 自动调整高度
+            const ta = e.target;
+            ta.style.height = '44px';
+            ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+        }
+
+        function setLoading(loading) {
+            isLoading = loading;
+            document.getElementById('send-btn').disabled = loading;
+        }
+
+        // === 新会话 ===
+        async function newSession() {
+            await fetch(`${API}/api/new_session`, {method: 'POST'});
+            currentSession = null;
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        // === 面板切换 ===
+        function showPanel(name) {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`panel-${name}`).classList.add('active');
+            event.target.classList.add('active');
+
+            if (name === 'memory') loadMemory();
+            if (name === 'skills') loadSkills();
+            if (name === 'tools') loadTools();
+        }
+
+        // === 数据加载 ===
+        async function loadStatus() {
+            try {
+                const resp = await fetch(`${API}/api/status`);
+                const data = await resp.json();
+                document.getElementById('stats').innerHTML = `
+                    <span>模型: ${data.model}</span>
+                    <span>工具: ${data.tools_count}</span>
+                    <span>记忆: ${data.memory_count}</span>
+                    <span>技能: ${data.skills_count}</span>
+                `;
+            } catch (e) {
+                document.getElementById('stats').innerHTML = '<span>连接失败</span>';
+            }
+        }
+
+        async function loadSessions() {
+            try {
+                const resp = await fetch(`${API}/api/sessions`);
+                const data = await resp.json();
+                const list = document.getElementById('session-list');
+                list.innerHTML = data.sessions.slice(0, 5).map(s =>
+                    `<button class="sidebar-btn" onclick="resumeSession('${s.id}')">${s.title.slice(0,20) || s.id}</button>`
+                ).join('');
+            } catch (e) {}
+        }
+
+        async function resumeSession(id) {
+            currentSession = id;
+            document.getElementById('messages').innerHTML =
+                '<div class="message assistant">已恢复会话 ' + id + '</div>';
+        }
+
+        async function loadMemory() {
+            try {
+                const resp = await fetch(`${API}/api/memory`);
+                const data = await resp.json();
+                document.getElementById('memory-list').innerHTML = data.entries.map(e =>
+                    `<div class="panel-item"><span class="label">[${e.category}]</span>${e.content}</div>`
+                ).join('') || '<div class="panel-item">暂无记忆</div>';
+            } catch (e) {}
+        }
+
+        async function loadSkills() {
+            try {
+                const resp = await fetch(`${API}/api/skills`);
+                const data = await resp.json();
+                document.getElementById('skills-list').innerHTML = data.skills.map(s =>
+                    `<div class="panel-item"><span class="label">${s.name}</span>${s.description} <em>(~${s.token_estimate}tok, 使用${s.use_count}次)</em></div>`
+                ).join('') || '<div class="panel-item">暂无技能</div>';
+            } catch (e) {}
+        }
+
+        async function loadTools() {
+            try {
+                const resp = await fetch(`${API}/api/tools`);
+                const data = await resp.json();
+                document.getElementById('tools-list').innerHTML = data.tools.map(t =>
+                    `<div class="panel-item"><span class="label">${t.name}</span>[${t.category}] ${t.description}</div>`
+                ).join('');
+            } catch (e) {}
+        }
+
+        // 启动
+        init();
+    </script>
+</body>
+</html>

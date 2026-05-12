@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Optional, TYPE_CHECKING
 
 from .base import Channel, IncomingMessage, OutgoingMessage
@@ -59,6 +60,19 @@ class WebChannel(Channel):
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+        # 静态文件（Web UI）
+        from fastapi.staticfiles import StaticFiles
+        from fastapi.responses import FileResponse
+        web_dir = Path(__file__).parent.parent.parent.parent.parent / "web"
+        if web_dir.exists():
+            @app.get("/")
+            async def serve_index():
+                return FileResponse(str(web_dir / "index.html"))
+        else:
+            @app.get("/")
+            async def root():
+                return {"message": "Embryo Agent API", "docs": "/docs"}
 
         # === 数据模型 ===
 
