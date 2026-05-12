@@ -7,8 +7,20 @@ Skills 是 Markdown 定义的可复用工作流文档，Agent 按需加载到上
 - Skills 不是代码，而是告诉 Agent "如何使用工具完成某类任务"的指令
 - 渐进式加载：先加载摘要，需要时再加载完整内容（节省 token）
 - Agent 可以从经验中自动创建新 Skill
+
+质量门控：
+- 新生成的 Skill 默认 status=draft
+- 必须经过 dry-run / 多次验证才能 status=verified
+- SkillValidator 管理整个生命周期
 """
 
 from .manager import SkillManager
+from .validator import SkillValidator, SkillValidationMeta, SkillStatus, RiskLevel
 
-__all__ = ["SkillManager"]
+__all__ = [
+    "SkillManager",
+    "SkillValidator",
+    "SkillValidationMeta",
+    "SkillStatus",
+    "RiskLevel",
+]
