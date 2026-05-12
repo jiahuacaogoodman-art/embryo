@@ -15,6 +15,7 @@ from typing import Optional
 
 from .config import Config
 from .learning.learner import LearningEngine
+from .logging import configure as configure_logging, get_logger
 from .memory.store import MemoryStore
 from .runtime.agent_loop import AgentLoop
 from .runtime.session import Session, SessionStatus
@@ -27,6 +28,8 @@ from .tools.computer_use import (
 from .tools.file_ops import EDIT_FILE_TOOL, LIST_DIR_TOOL, READ_FILE_TOOL, WRITE_FILE_TOOL
 from .tools.memory_tools import FORGET_TOOL, RECALL_TOOL, REMEMBER_TOOL, bind_memory_store
 from .tools.terminal import TERMINAL_TOOL
+
+logger = get_logger(__name__)
 
 
 class EmbryoAgent:
@@ -45,6 +48,17 @@ class EmbryoAgent:
     def __init__(self, config: Optional[Config] = None):
         self.config = config or Config()
         self.config.ensure_dirs()
+
+        # 配置日志
+        configure_logging(
+            level=self.config.log_level,
+            log_file=self.config.log_file,
+        )
+
+        # 配置校验
+        issues = self.config.validate()
+        if issues:
+            logger.warning("config_issues", issues=issues)
 
         # 初始化子系统
         self.memory = MemoryStore(
@@ -78,6 +92,14 @@ class EmbryoAgent:
         # 当前会话
         self._session: Optional[Session] = None
 
+        logger.info(
+            "agent_initialized",
+            model=self.config.llm.model,
+            tools=self.tools.count,
+            memories=self.memory.count,
+            skills=len(self.skills.list_skills()),
+        )
+
     def chat(self, user_input: str) -> str:
         """单轮对话
 
@@ -97,6 +119,10 @@ class EmbryoAgent:
         # 学习
         self.learner.learn_from_session(session)
 
+        # 持久化会话
+        if self.config.runtime.auto_save_session:
+            session.save(self.config.runtime.sessions_dir)
+
         # 提取最终回复
         assistant_msgs = [m for m in session.messages if m.role == "assistant"]
         if assistant_msgs:
@@ -115,6 +141,7 @@ class EmbryoAgent:
         print(f"Skills: {len(self.skills.list_skills())} 个")
         print(f"工具: {self.tools.count} 个")
         print("输入 /quit 退出, /new 新会话, /memory 查看记忆, /skills 查看技能")
+        print("     /history 查看会话历史, /resume <id> 恢复会话")
         print("-" * 60)
 
         while True:
@@ -165,16 +192,37 @@ class EmbryoAgent:
             for name in tools:
                 t = self.tools.get_tool(name)
                 print(f"  {name}: {t.description[:60] if t else ''}")
+        elif cmd == "/history":
+            sessions = Session.list_sessions(self.config.runtime.sessions_dir)
+            if not sessions:
+                print("(无历史会话)")
+            else:
+                print(f"最近 {min(len(sessions), 10)} 个会话:")
+                for s in sessions[:10]:
+                    import time as _time
+                    ts = _time.strftime("%m-%d %H:%M", _time.localtime(s["created_at"]))
+                    print(f"  [{s['id']}] {ts} | {s['status']} | {s['title'][:50]}")
+        elif cmd.startswith("/resume "):
+            session_id = cmd.split(" ", 1)[1].strip()
+            filepath = self.config.runtime.sessions_dir / f"{session_id}.json"
+            if filepath.exists():
+                self._session = Session.load(filepath)
+                self._session.status = SessionStatus.ACTIVE
+                print(f"已恢复会话 {session_id}")
+            else:
+                print(f"会话 {session_id} 不存在")
         elif cmd.startswith("/forget "):
             entry_id = cmd.split(" ", 1)[1]
             self.memory.forget(entry_id)
             print(f"已删除记忆: {entry_id}")
         else:
             print(f"未知命令: {cmd}")
-            print("可用: /quit /new /memory /skills /tools /forget <id>")
+            print("可用: /quit /new /memory /skills /tools /history /resume <id> /forget <id>")
 
     def _register_tools(self):
         """注册所有内置工具"""
+        from .tools.registry import Tool
+
         # 终端
         self.tools.register(TERMINAL_TOOL)
 
@@ -188,6 +236,21 @@ class EmbryoAgent:
         self.tools.register(REMEMBER_TOOL)
         self.tools.register(RECALL_TOOL)
         self.tools.register(FORGET_TOOL)
+
+        # Skill 按需加载工具（渐进式 disclosure）
+        self.tools.register(Tool(
+            name="load_skill",
+            description="加载指定 Skill 的完整内容。当系统提示某 Skill 已截断时使用。",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "skill_name": {"type": "string", "description": "Skill 名称"},
+                },
+                "required": ["skill_name"],
+            },
+            handler=lambda skill_name: self.skills.load_skill_full(skill_name),
+            category="skills",
+        ))
 
         # Computer Use (GUI)
         if self.config.computer_use.enabled:

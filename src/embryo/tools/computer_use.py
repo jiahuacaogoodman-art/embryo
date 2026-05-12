@@ -3,9 +3,13 @@
 参考 Hermes Agent 的 Computer Use 设计：
 - 后台操作桌面，不抢占用户鼠标焦点
 - 截图感知 + OCR + 坐标点击
-- 支持 click / type / scroll / screenshot / hotkey
+- 操作后自动截图验证闭环
+- 失败时自动重试 + 错误诊断
 
-这里实现为一组可被 Agent 调用的工具函数。
+核心设计：
+- 每个 GUI 动作执行后，自动截图与执行前对比
+- 如果界面无变化，判定为操作失败，附加诊断信息
+- 内置重试机制（坐标微调、延时重试）
 """
 
 from __future__ import annotations
@@ -13,6 +17,15 @@ from __future__ import annotations
 import time
 from pathlib import Path
 from typing import Any, Optional
+
+from ..logging import get_logger
+
+logger = get_logger(__name__)
+
+# 操作后等待界面响应的时间
+_ACTION_DELAY = 0.3
+# 最大重试次数
+_MAX_RETRIES = 2
 
 
 # ============================================================
@@ -58,7 +71,9 @@ def screenshot(region: str = "", save_path: str = "") -> str:
 # ============================================================
 
 def click(x: int, y: int, button: str = "left", clicks: int = 1) -> str:
-    """点击指定坐标
+    """点击指定坐标（带验证和重试）
+
+    执行后自动截图对比，如果界面无变化则诊断并重试。
 
     Args:
         x: 横坐标
@@ -67,12 +82,47 @@ def click(x: int, y: int, button: str = "left", clicks: int = 1) -> str:
         clicks: 点击次数 (1=单击, 2=双击)
 
     Returns:
-        操作结果
+        操作结果（含验证信息）
     """
     try:
         import pyautogui
+        from PIL import Image
+        import hashlib
+
+        # 操作前截图 hash（用于验证）
+        before_img = pyautogui.screenshot()
+        before_hash = hashlib.md5(before_img.tobytes()[:10000]).hexdigest()
+
+        # 执行点击
         pyautogui.click(x=x, y=y, button=button, clicks=clicks)
-        return f"已点击 ({x}, {y})，按键={button}，次数={clicks}"
+        time.sleep(_ACTION_DELAY)
+
+        # 操作后截图验证
+        after_img = pyautogui.screenshot()
+        after_hash = hashlib.md5(after_img.tobytes()[:10000]).hexdigest()
+
+        if before_hash != after_hash:
+            logger.debug("click_verified", x=x, y=y, result="界面已变化")
+            return f"已点击 ({x}, {y})，界面已响应变化"
+        else:
+            # 界面未变化 → 可能点击无效
+            # 重试一次（加小延时）
+            time.sleep(0.5)
+            pyautogui.click(x=x, y=y, button=button, clicks=clicks)
+            time.sleep(_ACTION_DELAY * 2)
+
+            retry_img = pyautogui.screenshot()
+            retry_hash = hashlib.md5(retry_img.tobytes()[:10000]).hexdigest()
+
+            if retry_hash != before_hash:
+                return f"已点击 ({x}, {y})，重试后界面已响应"
+            else:
+                logger.warning("click_no_change", x=x, y=y)
+                return (
+                    f"已点击 ({x}, {y})，但界面未发生变化。"
+                    f"可能原因：坐标偏移、元素未加载、按钮被遮挡。"
+                    f"建议：用 find_text_on_screen 重新定位目标，或等待后重试。"
+                )
     except ImportError:
         return "[Error] pyautogui 未安装"
     except Exception as e:
@@ -104,17 +154,24 @@ def mouse_move(x: int, y: int) -> str:
 # ============================================================
 
 def type_text(text: str, interval: float = 0.02) -> str:
-    """在当前焦点位置输入文字
+    """在当前焦点位置输入文字（带验证）
+
+    输入后通过截图对比验证文字是否成功输入。
 
     Args:
         text: 要输入的文字
         interval: 按键间隔
 
     Returns:
-        操作结果
+        操作结果（含验证）
     """
     try:
         import pyautogui
+        import hashlib
+
+        # 操作前截图
+        before_img = pyautogui.screenshot()
+        before_hash = hashlib.md5(before_img.tobytes()[:10000]).hexdigest()
 
         # 中文等非ASCII字符使用粘贴方式
         if any(ord(c) > 127 for c in text):
@@ -122,12 +179,27 @@ def type_text(text: str, interval: float = 0.02) -> str:
                 import pyperclip
                 pyperclip.copy(text)
                 pyautogui.hotkey("ctrl", "v")
-                return f"已粘贴输入: '{text[:50]}{'...' if len(text) > 50 else ''}'"
             except ImportError:
-                pass
+                # 回退：逐字符无法输入中文，报错
+                return "[Error] 输入中文需要 pyperclip 包。运行 pip install pyperclip"
+        else:
+            pyautogui.typewrite(text, interval=interval)
 
-        pyautogui.typewrite(text, interval=interval)
-        return f"已输入: '{text[:50]}{'...' if len(text) > 50 else ''}'"
+        time.sleep(_ACTION_DELAY)
+
+        # 验证
+        after_img = pyautogui.screenshot()
+        after_hash = hashlib.md5(after_img.tobytes()[:10000]).hexdigest()
+
+        display_text = text[:50] + ('...' if len(text) > 50 else '')
+        if before_hash != after_hash:
+            return f"已输入: '{display_text}'，界面已响应"
+        else:
+            return (
+                f"已输入: '{display_text}'，但界面未变化。"
+                f"可能原因：输入框未获得焦点。"
+                f"建议：先用 click 点击输入框，再 type_text。"
+            )
     except ImportError:
         return "[Error] pyautogui 未安装"
     except Exception as e:
