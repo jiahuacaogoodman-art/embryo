@@ -107,6 +107,10 @@ class AgentLoop:
 
         logger.info("agent_loop_start", session_id=session.id, input_length=len(user_input))
 
+        # === 判断是否为 GUI 任务 → 切换到 Plan 模式 ===
+        if self._is_gui_task(user_input):
+            return self._run_plan_mode(user_input, session)
+
         # 循环检测器
         tool_call_hashes: list[str] = []
         consecutive_errors = 0
@@ -434,6 +438,138 @@ class AgentLoop:
                 kwargs["base_url"] = self.config.llm.base_url
             self._client = OpenAI(**kwargs)
         return self._client
+
+    # =========================================================================
+    # Plan Mode — GUI 任务的动态 Todo List 执行模式
+    # =========================================================================
+
+    _GUI_KEYWORDS = [
+        "点击", "输入", "登录", "填写", "打开", "关闭", "截图",
+        "click", "type", "login", "fill", "open", "close",
+        "界面", "页面", "按钮", "菜单", "弹窗", "表单",
+        "gui", "screen", "desktop", "browser", "浏览器",
+        "操作", "自动化", "导出", "提交", "submit",
+    ]
+
+    def _is_gui_task(self, user_input: str) -> bool:
+        """判断是否为 GUI 操作任务（需要 plan 模式）。
+
+        简单的关键词匹配。如果任务描述涉及界面操作则返回 True。
+        """
+        if not self.config.computer_use.enabled:
+            return False
+
+        input_lower = user_input.lower()
+        match_count = sum(1 for kw in self._GUI_KEYWORDS if kw in input_lower)
+        return match_count >= 2  # 至少匹配 2 个关键词
+
+    def _run_plan_mode(self, user_input: str, session: Session) -> Session:
+        """Plan 模式：先规划 todo list，再逐步执行。
+
+        这是 Embryo 区别于 OpenClaw/Hermes 的核心模式。
+        """
+        from ..planner import TaskPlanner, PlanExecutor
+
+        logger.info("plan_mode_activated", session_id=session.id, task=user_input[:50])
+
+        # 创建 planner 和 executor
+        planner = TaskPlanner(llm_call=self._llm_call_simple)
+        executor = PlanExecutor(
+            planner=planner,
+            tools=self.tools,
+            llm_call=self._llm_call_simple,
+        )
+
+        # 1. 初始规划
+        session.add_message("assistant", f"正在分析任务并制定执行计划...")
+        if self._on_stream:
+            self._on_stream("正在分析任务并制定执行计划...\n")
+
+        plan = planner.create_plan(user_input)
+
+        # 将 plan 展示给用户
+        plan_text = f"已生成执行计划 ({len(plan.steps)} 步):\n"
+        for step in plan.steps:
+            plan_text += f"  {step.index}. {step.description}\n"
+        session.add_message("assistant", plan_text)
+        if self._on_stream:
+            self._on_stream(plan_text)
+
+        # 2. 逐步执行
+        plan = executor.execute_plan(plan)
+
+        # 3. 生成最终报告
+        report = self._generate_plan_report(plan)
+        session.add_message("assistant", report)
+        if self._on_stream:
+            self._on_stream(report)
+
+        # 4. 学习循环：将 GUI 操作经验存入 Memory
+        if plan.status == "completed":
+            self.memory.store(
+                "lesson",
+                f"成功完成 GUI 任务: {user_input[:80]}。步骤数: {len(plan.steps)}",
+                source=session.id,
+                tags=["gui_success"],
+            )
+        elif plan.status == "failed":
+            # 记录失败教训
+            failed_steps = [s for s in plan.steps if s.status.value == "failed"]
+            if failed_steps:
+                lesson = (
+                    f"GUI 任务失败: {user_input[:50]}。"
+                    f"失败步骤: {failed_steps[0].description}。"
+                    f"原因: {failed_steps[0].error[:100]}"
+                )
+                self.memory.store("lesson", lesson, source=session.id, tags=["gui_failure"])
+
+        # 5. 自动生成 Skill（如果任务成功）
+        if plan.status == "completed" and self.config.skills.auto_create:
+            self.skills.maybe_create_from_session(session)
+
+        self._reflect(session)
+        return session
+
+    def _generate_plan_report(self, plan) -> str:
+        """生成计划执行报告。"""
+        from ..planner.models import StepStatus
+
+        if plan.status == "completed":
+            header = "✓ 任务执行完成"
+        elif plan.status == "failed":
+            header = "✗ 任务执行失败"
+        else:
+            header = f"任务状态: {plan.status}"
+
+        lines = [header, f"进度: {plan.progress}", ""]
+        for step in plan.steps:
+            icon = {
+                "success": "✓", "failed": "✗", "skipped": "⊘",
+                "pending": "○", "running": "→", "replanned": "↻",
+            }.get(step.status.value, "?")
+            lines.append(f"  {icon} [{step.index}] {step.description}")
+            if step.error:
+                lines.append(f"      原因: {step.error[:60]}")
+
+        if plan.replan_count > 0:
+            lines.append(f"\n重规划次数: {plan.replan_count}")
+
+        return "\n".join(lines)
+
+    def _llm_call_simple(self, prompt: str) -> str:
+        """简单 LLM 调用（单轮，无工具），供 TaskPlanner 使用。"""
+        try:
+            client = self._get_client()
+            response = client.chat.completions.create(
+                model=self.config.llm.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=2000,
+            )
+            return response.choices[0].message.content or ""
+        except Exception as e:
+            logger.error("llm_simple_call_failed", error=str(e))
+            return ""
 
 
 # =============================================================================
