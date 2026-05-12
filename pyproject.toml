@@ -16,26 +16,33 @@ authors = [
 dependencies = [
     "openai>=1.0",
     "pydantic>=2.0",
+    "pillow>=10.0",
 ]
 
 [project.optional-dependencies]
-gui = [
-    "pillow>=10.0",
+local = [
     "pyautogui>=0.9.54",
     "pytesseract>=0.3.10",
     "pyperclip>=1.8",
 ]
+sandbox = [
+    "docker>=7.0",
+]
 browser = [
     "playwright>=1.40",
 ]
+anthropic = [
+    "anthropic>=0.30",
+]
 full = [
-    "pillow>=10.0",
     "pyautogui>=0.9.54",
     "pytesseract>=0.3.10",
     "pyperclip>=1.8",
     "opencv-python>=4.8",
     "numpy>=1.24",
     "playwright>=1.40",
+    "docker>=7.0",
+    "anthropic>=0.30",
 ]
 dev = [
     "pytest>=7.0",

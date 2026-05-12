@@ -12,6 +12,7 @@ from .observation import (
 )
 from .observer import Observer
 from .target_resolver import TargetResolver, ResolvedTarget, ResolveStatus
+from .som import SoMAnnotator, SoMResult, SoMElement
 
 __all__ = [
     "Observation",
@@ -22,4 +23,7 @@ __all__ = [
     "TargetResolver",
     "ResolvedTarget",
     "ResolveStatus",
+    "SoMAnnotator",
+    "SoMResult",
+    "SoMElement",
 ]
