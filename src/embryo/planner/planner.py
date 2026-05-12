@@ -4,6 +4,11 @@
 1. 接收用户任务 → 调用 LLM 生成结构化 todo list (TaskPlan)
 2. 执行过程中接收反馈 → 动态更新 plan (插入/修改/跳过步骤)
 3. 关键失败时触发全量重规划（保留已成功步骤）
+
+注意：本模块保留旧的 dataclass 模型 (planner.models) 用于执行器兼容。
+新的 Pydantic schema (planning.schema) 用于 LLM 输出验证。
+repair_and_validate_plan() 将 LLM 输出转为 planning.schema.TaskPlan，
+再由 _convert_to_executor_plan() 转为 planner.models.TaskPlan 供执行器使用。
 """
 
 from __future__ import annotations
@@ -13,6 +18,13 @@ import re
 from typing import Any, Callable, Optional
 
 from ..logging import get_logger
+from ..planning.repair import (
+    PlanValidationError,
+    extract_json_from_llm,
+    repair_and_validate_plan,
+    repair_json,
+)
+from ..planning.schema import TaskPlan as ValidatedPlan
 from .models import PlanStep, StepStatus, TaskPlan
 
 logger = get_logger("task_planner")
@@ -122,6 +134,12 @@ class TaskPlanner:
     def create_plan(self, task_description: str, screen_state: str = "") -> TaskPlan:
         """从任务描述创建初始执行计划。
 
+        流程：
+        1. 调用 LLM 生成 JSON
+        2. 通过 repair_and_validate_plan() 验证（Pydantic schema）
+        3. 转换为执行器格式（旧 dataclass 模型）
+        4. 如果验证失败，回退到旧的宽松解析
+
         Args:
             task_description: 用户的自然语言任务描述
             screen_state: 当前界面状态描述（OCR 文字等）
@@ -135,7 +153,27 @@ class TaskPlanner:
         )
 
         raw = self._llm_call(prompt)
-        steps = self._parse_steps(raw)
+
+        # 优先使用 Pydantic 验证管道
+        try:
+            validated_plan = repair_and_validate_plan(
+                raw_output=raw,
+                task_description=task_description,
+                strict=False,
+            )
+            steps = self._convert_validated_steps(validated_plan)
+            logger.info(
+                "plan_created_validated",
+                task=task_description[:50],
+                steps=len(steps),
+            )
+        except PlanValidationError as e:
+            # 回退到旧解析
+            logger.warning(
+                "plan_validation_fallback",
+                error=str(e)[:100],
+            )
+            steps = self._parse_steps(raw)
 
         plan = TaskPlan(
             task_description=task_description,
@@ -145,6 +183,50 @@ class TaskPlanner:
 
         logger.info("plan_created", task=task_description[:50], steps=len(steps))
         return plan
+
+    def _convert_validated_steps(self, validated_plan: ValidatedPlan) -> list[PlanStep]:
+        """将 Pydantic 验证后的计划转换为执行器格式"""
+        steps = []
+        for i, vs in enumerate(validated_plan.steps):
+            # 将新 action enum 映射回执行器能理解的动作名
+            action_map = {
+                "observe": "screenshot",
+                "type_text": "type",
+                "press_key": "hotkey",
+                "mouse_move": "click",
+                "find_text": "find_text",
+            }
+            action = action_map.get(vs.action.value, vs.action.value)
+
+            # 将 Target 转为旧格式 target string
+            target_str = vs.target.value if vs.target.value else ""
+
+            # 将 verification rules 转为旧格式字符串
+            verification_str = ""
+            if vs.verification:
+                rule = vs.verification[0]
+                if rule.type.value == "text_visible":
+                    verification_str = f"ocr_check:{rule.target}"
+                elif rule.type.value == "screenshot_changed":
+                    verification_str = "screenshot_diff"
+                elif rule.type.value == "url_contains":
+                    verification_str = f"url_contains:{rule.target}"
+                else:
+                    verification_str = f"{rule.type.value}:{rule.target}"
+
+            step = PlanStep(
+                index=i + 1,
+                description=vs.description,
+                action=action,
+                target=target_str,
+                parameters=vs.parameters,
+                expected_result=vs.expected_result,
+                verification=verification_str,
+                fallback=vs.fallback,
+                max_attempts=vs.max_retries + 1,
+            )
+            steps.append(step)
+        return steps
 
     def update_on_success(self, plan: TaskPlan, step: PlanStep, result: str):
         """步骤执行成功后更新 plan。
@@ -235,6 +317,7 @@ class TaskPlanner:
         """全量重规划后续步骤。
 
         保留已成功的步骤，从失败点开始重新生成后续计划。
+        使用 Pydantic 验证管道确保新步骤合法。
         """
         plan.replan_count += 1
 
@@ -248,7 +331,18 @@ class TaskPlanner:
         )
 
         raw = self._llm_call(prompt)
-        new_steps = self._parse_steps(raw)
+
+        # 优先使用验证管道
+        try:
+            validated_plan = repair_and_validate_plan(
+                raw_output=raw,
+                task_description=f"重规划: {plan.task_description}",
+                strict=False,
+            )
+            new_steps = self._convert_validated_steps(validated_plan)
+            logger.info("replan_validated", new_steps=len(new_steps))
+        except PlanValidationError:
+            new_steps = self._parse_steps(raw)
 
         if not new_steps:
             logger.warning("replan_failed_no_steps")
