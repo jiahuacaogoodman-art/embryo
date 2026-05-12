@@ -1,194 +1,170 @@
-# GUI Agent - 基于多模态界面感知与动态重规划的GUI智能体
+# Embryo
 
-> **通过"执行—验证—诊断—重规划"闭环，使 AI 能够在无 API 的传统 GUI 系统中完成可控、可纠错、可审计的自动化操作。**
+**自主 AI Agent 框架 — 参考 OpenClaw + Hermes Agent 架构**
 
-## 项目简介
+一个能持久运行、跨会话记忆、自我改进、具备 GUI 操作能力的个人 AI 智能体。
 
-本项目面向缺乏 API 接口、难以通过命令行自动化的传统桌面软件或网页系统，构建一套基于 GUI 界面的智能操作代理。系统通过屏幕截图、OCR 文字识别、鼠标坐标、窗口状态和控件结构等信息感知当前界面，由大语言模型生成标准化操作指令，并在每一步操作后进行结果验证和错误诊断，实现"感知—规划—执行—验证—纠错"的闭环式自动操作。
-
-## 技术架构
+## 架构
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    GUI Agent 主控调度器                    │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│   ┌──────────┐    ┌──────────┐    ┌──────────┐        │
-│   │ 界面感知  │───▶│ 动作规划  │───▶│ 动作执行  │        │
-│   │ 模块     │    │ 模块(LLM)│    │ 模块     │        │
-│   └──────────┘    └──────────┘    └──────────┘        │
-│        ▲                                │              │
-│        │          ┌──────────┐          ▼              │
-│        │          │ 错误诊断  │    ┌──────────┐        │
-│        │◀─────────│ 重规划   │◀───│ 结果验证  │        │
-│        │          │ 模块     │    │ 模块     │        │
-│        │          └──────────┘    └──────────┘        │
-│                                                         │
-├─────────────────────────────────────────────────────────┤
-│   ┌──────────┐    ┌──────────┐                         │
-│   │ 目标定位  │    │ 隔离环境  │                         │
-│   │ 模块     │    │ 管理     │                         │
-│   └──────────┘    └──────────┘                         │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                      EmbryoAgent                            │
+├──────────┬───────────┬────────────┬─────────────────────────┤
+│ Runtime  │  Skills   │  Memory    │  Learning               │
+│          │           │            │                         │
+│ AgentLoop│ SKILL.md  │ 持久存储    │ 失败教训提取            │
+│ (ReAct)  │ 渐进加载   │ 关键词检索  │ 用户纠正识别            │
+│ Session  │ 自动创建   │ 淘汰策略    │ Skill 自动生成          │
+├──────────┴───────────┴────────────┴─────────────────────────┤
+│                         Tools                               │
+│                                                             │
+│  terminal    file_ops    computer_use    memory    mcp      │
+│  (shell)     (R/W/Edit)  (GUI操作)       (存/取)   (扩展)    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## 核心特性
+## 核心能力
 
-- **多模态感知**：截图 + OCR + 鼠标坐标 + 窗口状态 + 控件树，全面理解界面
-- **LLM 驱动规划**：大语言模型生成结构化 JSON 动作指令，每步可审计
-- **闭环验证**：每步操作后验证结果，确保操作真的达到预期
-- **智能纠错**：失败后自动诊断原因（坐标偏移/加载延迟/焦点错误/弹窗遮挡等），动态调整策略
-- **隔离运行**：支持 VNC/Xvfb/RDP 隔离环境，不干扰用户正常操作
-- **安全兜底**：风险升高时自动停止并请求人工接管
+| 能力 | 说明 | 来源 |
+|------|------|------|
+| ReAct Loop | LLM → tool call → execute → inject result → loop | OpenClaw |
+| Skills | Markdown 工作流文档，渐进式加载 | OpenClaw + Hermes |
+| 持久记忆 | 跨会话记忆偏好/教训/环境/项目信息 | Hermes |
+| Computer Use | 截图+OCR+点击+输入，操作 GUI 界面 | Hermes |
+| 自我改进 | 从失败学习、自动生成 Skill | Hermes |
+| MCP 扩展 | 连接外部 MCP Server 扩展工具 | OpenClaw |
 
 ## 快速开始
 
-### 安装
-
 ```bash
-# 安装基础依赖
+# 安装（最小依赖，只需 openai）
 pip install -e .
 
-# 如需网页自动化支持
-pip install -e ".[web]"
+# 如需 GUI 操作能力
+pip install -e ".[gui]"
 
-# 开发环境
-pip install -e ".[dev]"
+# 设置 API Key
+export OPENAI_API_KEY="your-key"
+
+# REPL 模式
+embryo
+
+# 单次执行
+embryo "帮我看下当前目录结构"
 ```
 
-### 系统依赖
-
-```bash
-# Ubuntu/Debian
-sudo apt install tesseract-ocr tesseract-ocr-chi-sim xvfb x11vnc
-
-# macOS
-brew install tesseract
-```
-
-### 配置
-
-```bash
-# 设置 LLM API Key
-export OPENAI_API_KEY="your-api-key"
-
-# 可选：自定义模型端点（兼容 OpenAI 接口的服务）
-export OPENAI_BASE_URL="https://your-api-endpoint/v1"
-
-# 可选：指定模型
-export GUI_AGENT_MODEL="gpt-4o"
-```
-
-### 运行
-
-```bash
-# 基础用法
-gui-agent "登录系统并打开护理记录页面"
-
-# 指定环境和模型
-gui-agent --env vnc --model gpt-4o "填写并提交表单"
-
-# 调试模式
-gui-agent --log-level DEBUG --max-steps 20 "点击搜索按钮"
-```
-
-### 代码调用
+## 代码调用
 
 ```python
-from gui_agent.agent import GUIAgent
-from gui_agent.config import AgentConfig
+from embryo.agent import EmbryoAgent
+from embryo.config import Config
 
-# 使用默认配置
-agent = GUIAgent()
-task = agent.run_task("登录系统并打开老人护理记录页面")
+# 默认配置
+agent = EmbryoAgent()
+response = agent.chat("列出当前目录的文件")
+print(response)
 
 # 自定义配置
-config = AgentConfig()
+config = Config()
 config.llm.model = "gpt-4o"
-config.llm.api_key = "your-key"
-config.environment.type = "vnc"
+config.computer_use.enabled = True
 
-agent = GUIAgent(config)
-task = agent.run_task("填写表单并提交", max_steps=30)
-
-print(f"任务状态: {task.status.value}")
-print(f"执行步骤: {len(task.steps)}")
+agent = EmbryoAgent(config)
+agent.run_repl()  # 交互模式
 ```
 
 ## 项目结构
 
 ```
-src/gui_agent/
-├── __init__.py          # 包入口
-├── agent.py             # 主控调度器（闭环流程）
-├── config.py            # 全局配置
-├── models.py            # 数据模型定义
-├── main.py              # 命令行入口
-├── perception/          # 界面感知模块
-│   ├── screen_capture.py    # 屏幕截图
-│   ├── ocr_engine.py        # OCR文字识别
-│   ├── element_detector.py  # UI元素检测
-│   └── perception_engine.py # 感知引擎总调度
-├── locator/             # 目标定位模块
-│   └── target_locator.py    # 多策略目标定位
-├── planner/             # 动作规划模块
-│   └── action_planner.py    # LLM动作规划
-├── executor/            # 动作执行模块
-│   └── action_executor.py   # GUI操作执行
-├── verifier/            # 结果验证模块
-│   └── result_verifier.py   # 多维度验证
-├── replanner/           # 错误诊断与重规划
-│   ├── error_diagnoser.py   # 错误诊断
-│   └── replanner.py         # 动态重规划
-└── environment/         # 隔离运行环境
-    └── sandbox_manager.py   # 沙箱管理
+src/embryo/
+├── __init__.py         # 包入口
+├── agent.py            # 主入口 - 组装所有子系统
+├── config.py           # 全局配置（dataclass）
+├── main.py             # CLI 入口
+├── runtime/            # Agent Runtime
+│   ├── agent_loop.py   # ReAct 循环（LLM ↔ Tool 交替执行）
+│   └── session.py      # 会话管理（消息历史、状态）
+├── skills/             # Skills 系统
+│   └── manager.py      # Skill 索引、匹配、加载、创建
+├── memory/             # 持久记忆
+│   └── store.py        # 存储/检索/淘汰（JSON 后端）
+├── learning/           # 学习循环
+│   └── learner.py      # 从经验中提取教训和 Skill
+└── tools/              # 工具集
+    ├── registry.py     # 工具注册表 + OpenAI schema 导出
+    ├── terminal.py     # Shell 命令执行
+    ├── file_ops.py     # 文件 读/写/编辑/列目录
+    ├── computer_use.py # GUI 操作（截图/点击/输入/OCR）
+    ├── memory_tools.py # Agent 主动管理记忆
+    └── mcp_client.py   # MCP Server 连接
+
+skills/                 # 内置 Skill 文档
+├── gui-login/SKILL.md
+└── form-filling/SKILL.md
 ```
 
-## 技术路线
+## Skills 系统
 
-详见 [docs/technical_route.md](docs/technical_route.md)
+Skills 是 Markdown 文件，不是代码。它告诉 Agent "如何完成某类任务"：
 
-### 核心流程
+```markdown
+---
+name: "GUI 系统登录"
+description: "通过 GUI 操作完成系统登录"
+tags: [gui, login, computer_use]
+triggers: [登录, login]
+---
 
+# GUI 系统登录
+
+## 执行步骤
+1. 截图观察当前界面
+2. OCR 识别文字，确认是登录页
+3. 找到用户名输入框并输入
+4. 找到密码输入框并输入
+5. 点击登录按钮
+6. 截图验证是否成功
 ```
-用户任务输入 → 界面感知 → 目标定位 → 动作规划(LLM)
-    → 动作执行 → 结果验证 → [成功] → 继续下一步
-                          → [失败] → 错误诊断 → 动态重规划 → 重新执行
-```
 
-### 错误处理机制
+Agent 会在收到相关任务时自动加载匹配的 Skill 到上下文中。
 
-| 失败现象 | 诊断原因 | 重规划策略 |
-|---------|---------|-----------|
-| 点击后无变化 | 坐标偏移/按钮未加载 | 重新定位，调整坐标或等待 |
-| 输入无效 | 输入框未获得焦点 | 先点击输入框，再重新输入 |
-| 页面未跳转 | 网络延迟/登录失败 | 延长等待，读取错误提示 |
-| 出现弹窗 | 弹窗遮挡操作路径 | 先处理弹窗 |
-| OCR未识别目标 | 字体小/背景复杂 | 改用控件树或模板匹配 |
-| 连续失败 | 风险升高 | 停止任务并请求人工接管 |
+## 记忆系统
 
-## 支持的操作类型
+记忆有 6 个类别：
 
-| 操作 | 说明 |
+| 类别 | 说明 | 示例 |
+|------|------|------|
+| preference | 用户偏好 | "用户喜欢简洁的代码风格" |
+| environment | 环境信息 | "系统是 Ubuntu 22.04" |
+| lesson | 经验教训 | "登录前需要等待页面加载" |
+| project | 项目知识 | "项目用 FastAPI + PostgreSQL" |
+| fact | 一般事实 | "用户名是 admin" |
+| correction | 用户纠正 | "不要用 print，用 logger" |
+
+Agent 可以通过 `remember` 工具主动存储记忆，也会在会话结束后自动提取教训。
+
+## 工具系统
+
+内置 11 个工具：
+
+| 工具 | 功能 |
 |------|------|
-| `click` | 单击目标位置 |
-| `double_click` | 双击目标 |
-| `right_click` | 右键点击 |
-| `type` | 输入文字（支持中文） |
-| `hotkey` | 键盘快捷键 |
-| `scroll` | 滚动页面 |
-| `wait` | 等待加载 |
-| `back` | 返回上一页 |
-| `drag` | 拖拽操作 |
-| `stop` | 任务完成 |
-| `ask_human` | 请求人工接管 |
+| `terminal` | 执行 shell 命令 |
+| `read_file` | 读取文件 |
+| `write_file` | 创建/写入文件 |
+| `edit_file` | 精确编辑文件 |
+| `list_directory` | 列目录 |
+| `remember` | 存储记忆 |
+| `recall` | 检索记忆 |
+| `screenshot` | 截屏 |
+| `click` | 鼠标点击 |
+| `type_text` | 键盘输入 |
+| `find_text_on_screen` | OCR 文字定位 |
+
+通过 MCP 配置可扩展更多工具。
 
 ## 环境要求
 
 - Python >= 3.10
-- Tesseract OCR（含中文语言包）
-- 显示环境（Xvfb/VNC/本地桌面）
-
-## 许可证
-
-MIT License
+- OpenAI 兼容 API（必需）
+- Tesseract OCR + pyautogui（GUI 操作时需要）
