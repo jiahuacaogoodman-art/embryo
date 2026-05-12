@@ -1,6 +1,6 @@
 """Prompt 注入防护 (Prompt Injection Guard)
 
-搬运自 Hermes Agent (MIT License) 并适配 Embryo 架构。
+
 
 扫描所有被注入到系统提示中的外部内容（SKILL.md、AGENTS.md、.cursorrules、
 用户提供的上下文文件等），检测潜在的 prompt injection 攻击。

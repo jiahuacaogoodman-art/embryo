@@ -1,6 +1,5 @@
 """持久记忆系统
 
-跨会话记忆存储，参考 Hermes Agent 的 MEMORY 设计：
 - 用户偏好 (preference)
 - 环境信息 (environment)
 - 经验教训 (lesson)

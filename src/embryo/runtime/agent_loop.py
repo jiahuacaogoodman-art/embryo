@@ -7,9 +7,6 @@
 - 优雅降级：LLM 不可用时给出有意义的错误，不崩溃
 - 背压保护：工具输出过长时截断
 
-参考:
-- OpenClaw Pi Agent Core (LLM → tool calls → execute → inject results → loop)
-- Hermes 学习循环 (complete task → extract experience → generate/update skill)
 """
 
 from __future__ import annotations
@@ -466,7 +463,7 @@ class AgentLoop:
     def _run_plan_mode(self, user_input: str, session: Session) -> Session:
         """Plan 模式：先规划 todo list，再逐步执行。
 
-        这是 Embryo 区别于 OpenClaw/Hermes 的核心模式。
+        
         """
         from ..planner import TaskPlanner, PlanExecutor
 

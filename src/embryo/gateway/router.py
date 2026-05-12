@@ -1,7 +1,6 @@
 """Gateway 路由器 — 多通道消息统一调度
 
 管理所有通道的启动/停止，将入站消息路由到 Agent。
-参考 OpenClaw 的单一 Gateway 守护进程设计。
 """
 
 from __future__ import annotations

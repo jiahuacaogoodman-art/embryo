@@ -1,7 +1,6 @@
 """Skills 系统
 
 Skills 是 Markdown 定义的可复用工作流文档，Agent 按需加载到上下文中。
-参考 OpenClaw 的 SKILL.md 和 Hermes 的渐进式加载机制。
 
 核心概念：
 - 一个 Skill = 一个目录，包含 SKILL.md（主文档）和可选附件

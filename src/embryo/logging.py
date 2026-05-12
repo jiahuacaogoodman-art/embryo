@@ -1,7 +1,6 @@
 """结构化日志系统
 
 提供 JSON 格式结构化日志，每步操作可回溯审计。
-参考 OpenClaw 的可观测性设计。
 
 用法：
     from embryo.logging import get_logger

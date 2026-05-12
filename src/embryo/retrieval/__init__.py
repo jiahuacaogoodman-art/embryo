@@ -1,6 +1,6 @@
 """Hybrid Retrieval 管线
 
-搬运自 PythonClaw/core/retrieval/ (MIT License) 并适配。
+
 
 管线流程:
     corpus → BM25 (稀疏) + Embedding (密集)

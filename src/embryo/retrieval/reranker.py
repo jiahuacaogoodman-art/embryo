@@ -1,6 +1,6 @@
 """LLM 重排序器
 
-搬运自 PythonClaw (MIT License)。
+
 """
 
 from __future__ import annotations

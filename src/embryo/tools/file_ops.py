@@ -1,6 +1,5 @@
 """文件操作工具 - 读写和编辑文件
 
-参考 OpenClaw 的 Read/Write/Edit 三个核心工具。
 """
 
 from __future__ import annotations

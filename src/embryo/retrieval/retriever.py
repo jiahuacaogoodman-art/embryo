@@ -1,6 +1,6 @@
 """HybridRetriever — BM25 + Embedding + RRF + LLM Reranker
 
-搬运自 PythonClaw (MIT License) 并适配 Embryo。
+
 """
 
 from __future__ import annotations

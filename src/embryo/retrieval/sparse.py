@@ -1,6 +1,6 @@
 """BM25 稀疏检索
 
-搬运自 PythonClaw (MIT License)。
+
 支持 rank-bm25 包（pip install rank-bm25），无则回退到 TF 词频匹配。
 增强：支持中文分词（bigram）。
 """

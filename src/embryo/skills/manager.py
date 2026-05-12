@@ -1,8 +1,5 @@
 """Skill 管理器 - 索引、渐进式加载、token 预算、版本管理
 
-参考:
-- OpenClaw: Skill = Markdown 文件，non-engineer 可编写
-- Hermes: 渐进式 disclosure（先摘要，需要时展开），token 预算控制
 
 设计要点:
 1. 渐进式加载：默认只加载摘要到上下文，Agent 可用 load_skill 工具展开全文

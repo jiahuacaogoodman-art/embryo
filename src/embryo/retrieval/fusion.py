@@ -1,6 +1,6 @@
 """Reciprocal Rank Fusion (RRF)
 
-搬运自 PythonClaw (MIT License)。
+
 """
 
 from __future__ import annotations

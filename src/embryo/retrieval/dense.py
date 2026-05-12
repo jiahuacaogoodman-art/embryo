@@ -1,6 +1,6 @@
 """密集检索 — 向量嵌入语义相似度
 
-搬运自 PythonClaw (MIT License)。三级降级策略。
+
 """
 
 from __future__ import annotations

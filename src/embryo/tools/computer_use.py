@@ -1,6 +1,5 @@
 """Computer Use 工具 - GUI 桌面操作
 
-参考 Hermes Agent 的 Computer Use 设计：
 - 后台操作桌面，不抢占用户鼠标焦点
 - 截图感知 + OCR + 坐标点击
 - 操作后自动截图验证闭环

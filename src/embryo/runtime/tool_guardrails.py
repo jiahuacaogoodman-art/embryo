@@ -1,6 +1,6 @@
 """工具循环守卫 (Tool Call Guardrails)
 
-搬运自 Hermes Agent (MIT License) 并适配 Embryo 架构。
+
 
 无副作用的纯控制器：跟踪每轮工具调用状态，返回决策。
 运行时代码决定如何处理这些决策（注入警告/合成结果/终止循环）。

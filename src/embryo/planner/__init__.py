@@ -1,6 +1,6 @@
 """TaskPlanner — 动态 Todo List 任务规划器
 
-这是 Embryo 区别于 OpenClaw/Hermes 的核心差异化模块。
+Embryo 的核心差异化模块：动态任务规划。
 
 核心理念：AI 应该有"脑子"
 - 不是每步问一次 LLM "下一步干啥"（响应式）

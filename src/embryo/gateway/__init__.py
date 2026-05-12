@@ -1,6 +1,5 @@
 """Gateway 层 — 多通道消息路由
 
-参考 OpenClaw 的 Gateway 设计：
 - 单一 Gateway 守护进程接管所有消息通道
 - 统一的消息抽象层（不同通道的消息归一化为 IncomingMessage）
 - 会话路由：同一用户的消息路由到同一 Session

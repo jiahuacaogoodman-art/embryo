@@ -1,6 +1,6 @@
 """上下文压缩 (Context Compaction)
 
-搬运自 PythonClaw (MIT License) 并适配 Embryo 架构。
+
 
 当对话历史超过 token 阈值时，自动：
 1. 将旧消息中的重要事实提取到 Memory（memory flush）

@@ -1,6 +1,5 @@
 """终端工具 - 执行 Shell 命令
 
-参考 OpenClaw 的 Bash 工具：能执行任意 shell 命令并返回输出。
 """
 
 from __future__ import annotations

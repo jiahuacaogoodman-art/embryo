@@ -1,6 +1,5 @@
 """API Key 轮转池
 
-参考 Hermes Agent 的多 Key 管理设计。
 
 当配置了多个 API Key 时，自动轮换避免单 Key 限流。
 支持：

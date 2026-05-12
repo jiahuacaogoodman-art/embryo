@@ -12,7 +12,6 @@
 
 参考：
 - https://spec.modelcontextprotocol.io/
-- OpenClaw 的 MCP 工具连接设计
 """
 
 from __future__ import annotations
@@ -303,7 +302,7 @@ class MCPClient:
     def load_config_file(self, config_path: Path):
         """从 JSON 配置文件加载 MCP Server 列表
 
-        格式兼容 OpenClaw/VSCode 的 mcp.json：
+        兼容标准 mcp.json 格式：
         {
           "mcpServers": {
             "filesystem": {

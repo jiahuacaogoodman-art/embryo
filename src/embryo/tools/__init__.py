@@ -1,6 +1,5 @@
 """工具系统
 
-工具是 Agent 与环境交互的接口。参考 OpenClaw 的 4 个核心工具 + 扩展体系。
 
 核心工具集：
 - terminal: 执行 shell 命令

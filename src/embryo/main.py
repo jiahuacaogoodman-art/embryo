@@ -18,7 +18,6 @@ from .config import Config
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Embryo - 自主 AI Agent（参考 OpenClaw + Hermes）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("task", nargs="?", default="", help="要执行的任务（空=进入 REPL，'serve'=启动服务）")
