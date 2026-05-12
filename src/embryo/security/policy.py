@@ -277,7 +277,7 @@ DEFAULT_DENIED_COMMANDS = [
     r"\brm\s+-rf\s+/\s*$",         # rm -rf /
     r"\bmkfs\b",                     # 格式化
     r"\bdd\s+if=.*of=/dev/",        # dd 覆写设备
-    r":(){ :\|:& };:",              # fork bomb
+    r":\(\)\{\s*:\|:&\s*\};:",              # fork bomb
     r"\bshutdown\b",                 # 关机
     r"\breboot\b",                   # 重启
     r"\binit\s+0\b",                # 关机
